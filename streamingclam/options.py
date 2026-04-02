@@ -10,29 +10,33 @@ import argparse
 class TrainConfig:
     experiment_name: str = "sclam_debug"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
     wandb_project_name: str = "sclam_debug"
-    image_path: str = ""
+    logger_type: str = "csv"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
+    image_path: str = "/data/wsi_data/CAMELYON16/images"
+    #mask_path: str = "/data/wsi_data/CAMELYON16/masks"
     mask_path: str = ""
     fold: int = 0
-    train_csv: str = f"/data/pathology/projects/pathology-bigpicture-streamingclam/streaming_experiments/camelyon/data_splits/train_{str(fold)}.csv"
-    val_csv: str = f"/data/pathology/projects/pathology-bigpicture-streamingclam/streaming_experiments/camelyon/data_splits/val_{str(fold)}.csv"
-    test_csv: str = "/data/pathology/projects/pathology-bigpicture-streamingclam/streaming_experiments/camelyon/data_splits/test.csv"
-    attention_csv: str = "/data/pathology/projects/pathology-bigpicture-streamingclam/streaming_experiments/camelyon/data_splits/test.csv"
-    mask_suffix: str = "_tissue"  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
-    mode: str = "test"  # fit, validation, test, attention, or predict
-    unfreeze_streaming_layers_at_epoch: int = 25
+    train_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_train.csv"
+    val_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_val.csv"
+    test_csv: str = "/data/wsi_data/CAMELYON16/camelyon16_test.csv"
+    attention_csv: str = ""
+    #mask_suffix: str = "_mask"  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
+    mask_suffix: str = ""  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
+    mode: str = "fit" #train, fit, validation, test, attention, or predict
+    unfreeze_streaming_layers_at_epoch: int = 5
 
     # Trainer options
     num_epochs: int = 35  # The number of epochs to train (max)
     strategy: str = "ddp_find_unused_parameters_true"
-    default_save_dir: str = "/data/pathology/projects/pathology-bigpicture-uncertainty/ckp"
+    default_save_dir: str = "/data/ccardona/sstep_savedir/experiments/"
     ckp_path: str = ""  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
-    resume: bool = True  # Whether to resume training from the last/best epoch
+    resume: bool = False  # Whether to resume training from the last/best epoch
     grad_batches: int = 2  # Gradient accumulation: the amount of batches before optimizer step
     num_gpus: int = 4
     precision: str = "32"
 
     # StreamingClam options
-    encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    #encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    encoder: str = "resnet18"  # Resnet 18, ResNet34, Resnet50, Resnet39
     branch: str = "sb"  # sb or mb
     pooling_layer: str = "maxpool"  # one of maxpool, avgpool
     pooling_kernel: int = 8  # Kernel size & stride for the maxpool/avgpool
@@ -44,7 +48,7 @@ class TrainConfig:
     stream_pooling_kernel: bool = False
     learning_rate: float = 2e-4  # the learning rate when training the CLAM head,
                                  # the finetuning callback defined in finetuned.py will handle the optimizer for all layers
-
+    additive: bool = True  # whether to add the output of the streaming layers to the output of the encoder, or to replace it  
     # Streaming options
     tile_size: int = 3200  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
     tile_size_finetune: int = 3200  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
@@ -58,7 +62,8 @@ class TrainConfig:
     image_size: int = 65536  # represents image size if variable_input_shape=False, else the maximum image size
     variable_input_shapes: bool = True
     filetype: str = ".tif"
-    read_level: int = 1  # the level of the tif file (0 is highest resolution)
+    #read_level: int = 1  # the level of the tif file (0 is highest resolution)
+    read_level: int = 4  # the level of the tif file (0 is highest resolution)
     num_workers: int = 3
     use_augmentations: bool = True
 

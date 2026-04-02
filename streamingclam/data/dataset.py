@@ -74,10 +74,15 @@ class StreamingClassificationDataset(Dataset):
             images, label = self.get_img_path(i)  #
 
             # Files can be just images, but also image, mask
+            all_exist = True
             for file in images:
                 if not file.exists():
                     print(f"WARNING {file} not found, excluded both image and mask (if present)!")
-                    continue
+                    all_exist = False
+                    break
+
+            if not all_exist:
+                continue
 
             included["images"].append(images[0])
             included["labels"].append(label)
@@ -86,6 +91,18 @@ class StreamingClassificationDataset(Dataset):
                 included["masks"].append(images[1])
 
         self.data_paths = included
+        self._use_openslide = self._detect_openslide()
+
+    def _detect_openslide(self):
+        """Detect whether images use the openslide loader (level=) or tiff loader (page=)."""
+        if not self.data_paths["images"]:
+            return False
+        img_fname = str(self.data_paths["images"][0])
+        try:
+            pyvips.Image.new_from_file(img_fname, page=0)
+            return False
+        except pyvips.error.Error:
+            return True
 
     def get_img_path(self, idx):
         img_fname = self.classification_frame.iloc[idx, 0]
@@ -104,7 +121,14 @@ class StreamingClassificationDataset(Dataset):
 
         img_fname = str(self.data_paths["images"][idx])
         label = int(self.data_paths["labels"][idx])
-        image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
+        # openslide loader uses `level`, tifftiled/other loaders use `page`
+        if self._use_openslide:
+            image = pyvips.Image.new_from_file(img_fname, level=self.read_level)
+            # openslide produces RGBA; flatten to RGB so downstream expects 3 bands
+            if image.bands == 4:
+                image = image.flatten()
+        else:
+            image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
         images["image"] = image
 
         if self.mask_dir:

@@ -42,7 +42,8 @@ class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
         self.freeze(pl_module.stream_network.stream_module, train_bn=False)
 
         # Just for good measure.
-        pl_module.freeze_streaming_normalization_layers()
+        #pl_module.freeze_streaming_normalization_layers()
+        pl_module.freeze_normalization_layers()
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
         # When `current_epoch` is self._unfreeze_at_epoch, feature_extractor will start training.

@@ -1,5 +1,6 @@
 import torch
-from lightstream.modules.imagenet_template import ImageNetClassifier
+from lightstream.modules.lightningstreaming import LightningStreamingModule
+from lightstream.modules.streaming import StreamingModule
 from lightstream.models.resnet.resnet import split_resnet
 from streamingclam.models.clam import CLAM_MB, CLAM_SB
 from torchvision.models import resnet18, resnet34, resnet50
@@ -53,7 +54,6 @@ class CLAMConfig:
                 n_classes=self.n_classes,
                 instance_loss_fn=self.instance_loss_fn(),
                 subtyping=self.subtyping,
-                additive=self.additive,
             )
         elif self.branch == "mb":
             print("Loading CLAM with multiple branches \n")
@@ -73,7 +73,7 @@ class CLAMConfig:
             )
 
 
-class StreamingCLAM(ImageNetClassifier):
+class StreamingCLAM(LightningStreamingModule):
     model_choices = {"resnet18": resnet18, "resnet34": resnet34, "resnet50": resnet50}
 
     def __init__(
@@ -117,45 +117,29 @@ class StreamingCLAM(ImageNetClassifier):
         # Define the streaming network and head
         if encoder in ("resnet18", "resnet34", "resnet50"):
             network = StreamingCLAM.model_choices[encoder](weights="IMAGENET1K_V1")
-            stream_net, _ = split_resnet(network)
+            stream_net = split_resnet(network)
 
         head = CLAMConfig(encoder=encoder, branch=branch, n_classes=n_classes, additive=additive).configure_clam()
 
-        # At the end of the ResNet model, reduce the spatial dimensions with additional pooling layers
+        # Build streaming options and wrap raw network in StreamingModule
         self._get_streaming_options(**kwargs)
+        self.train_streaming_layers = train_streaming_layers
 
-        self.ds_blocks = None
+        # Compute pooling blocks before super().__init__(), but defer nn.Module assignment
+        _ds_blocks = None
         if self.pooling_kernel > 0:
             if self.stream_pooling_kernel:
                 stream_net = self.add_pooling_layers(stream_net)
-                super().__init__(
-                    stream_net,
-                    head,
-                    tile_size,
-                    loss_fn,
-                    train_streaming_layers=train_streaming_layers,
-                    **self.streaming_options,
-                )
             else:
-                ds_blocks, head = self.add_pooling_layers(head)
-                super().__init__(
-                    stream_net,
-                    head,
-                    tile_size,
-                    loss_fn,
-                    train_streaming_layers=train_streaming_layers,
-                    **self.streaming_options,
-                )
-                self.ds_blocks = ds_blocks
-        else:
-            super().__init__(
-                stream_net,
-                head,
-                tile_size,
-                loss_fn,
-                train_streaming_layers=train_streaming_layers,
-                **self.streaming_options,
-            )
+                _ds_blocks, head = self.add_pooling_layers(head)
+
+        stream_module = StreamingModule(stream_net, tile_size, **self.streaming_options)
+        # Module.__init__() is called here; nn.Module attributes can be assigned after this
+        super().__init__(stream_module)
+
+        self.head = head
+        self.loss_fn = loss_fn
+        self.ds_blocks = _ds_blocks  # None or nn.Sequential
 
         self.train_acc = Accuracy(task="binary", num_classes=n_classes)
         self.train_auc = AUROC(task="binary", num_classes=n_classes)
@@ -187,6 +171,12 @@ class StreamingCLAM(ImageNetClassifier):
         else:
             return ds_blocks, network
 
+    def _pool_and_move(self, fmap):
+        """Apply ds_blocks pooling on CPU then move to GPU."""
+        if self.ds_blocks is not None:
+            fmap = self.ds_blocks(fmap)  # pooling on CPU - reduces spatial dims before GPU transfer
+        return fmap.to(self.device)
+
     def forward_head(
         self,
         fmap,
@@ -197,9 +187,6 @@ class StreamingCLAM(ImageNetClassifier):
         attention_only=False,
     ):
         batch_size, num_features, h, w = fmap.shape
-
-        if self.ds_blocks is not None:
-            fmap = self.ds_blocks(fmap)
 
         # Mask background, can heavily reduce inputs to clam network
         if mask is not None:
@@ -228,8 +215,15 @@ class StreamingCLAM(ImageNetClassifier):
 
         return logits, Y_prob, Y_hat, A_raw, instance_dict
 
+    def transfer_batch_to_device(self, batch, device, dataloader_idx):
+        # Images must stay on CPU for tile-by-tile streaming; move everything else to device
+        image = batch.pop("image")
+        batch = super().transfer_batch_to_device(batch, device, dataloader_idx)
+        batch["image"] = image  # put back on CPU
+        return batch
+
     def forward(self, image, mask=None):
-        fmap = self.forward_streaming(image)
+        fmap = self._pool_and_move(self.stream_network.forward(image, result_on_cpu=True))
         out = self.forward_head(
             fmap,
             mask=mask,
@@ -245,11 +239,12 @@ class StreamingCLAM(ImageNetClassifier):
         label = batch["label"]
 
         self.image = image
-        self.str_output = self.forward_streaming(image)
+        self.str_output = self.stream_network.forward(image, result_on_cpu=True)
         self.str_output.requires_grad = self.training
+        fmap_gpu = self._pool_and_move(self.str_output)
 
         logits, Y_prob, Y_hat, A_raw, instance_dict = self.forward_head(
-            self.str_output,
+            fmap_gpu,
             mask=mask,
             instance_eval=self.instance_eval,
             label=label if self.instance_eval else None,
@@ -357,7 +352,7 @@ class StreamingCLAM(ImageNetClassifier):
             return self.test_step(batch, batch_idx)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.params, lr=self.learning_rate, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
 
         def lr_lambda(epoch):
             if epoch < self.unfreeze_at_epoch:
@@ -373,7 +368,7 @@ class StreamingCLAM(ImageNetClassifier):
 
         return [optimizer], [lr_scheduler]
 
-    def backward(self, loss):
+    def backward(self, loss, *args, **kwargs):
         loss.backward()
         # del loss
         # Don't call this>? https://pytorch-lightning.readthedocs.io/en/1.5.10/guides/speed.html#things-to-avoid
