@@ -3,6 +3,7 @@ import math
 import pandas as pd
 from pathlib import Path
 from streamingclam.data.dataset import StreamingClassificationDataset
+import numpy as np # Add this import
 import albumentationsxl as A
 
 
@@ -68,6 +69,21 @@ class AttentionDataset(StreamingClassificationDataset):
             hscale = new_width / sample["mask"].width
 
             sample["mask"] = sample["mask"].resize(hscale, vscale=vscale, kernel="nearest")
+            
+            # Handle potential pyvips errors during mask conversion
+            # The `albumentationsxl.ToTensor` transform expects a pyvips.Image (or PIL Image)
+            # that it can call `.numpy()` on.
+            # We explicitly convert to numpy, handle errors, then convert back to pyvips.Image
+            # to satisfy the transform.
+            try:
+                mask_np = sample["mask"].numpy()
+            except pyvips.Error as e:
+                # Retrieve the actual mask file path for a more informative warning
+                mask_file_path = str(self.data_paths["masks"][idx])
+                print(f"WARNING: pyvips error converting mask file '{mask_file_path}' to numpy. Replacing with all-zero mask: {e}")
+                mask_np = np.zeros((sample["mask"].height, sample["mask"].width), dtype=np.uint8)
+            
+            sample["mask"] = pyvips.Image.new_from_array(mask_np)
 
         to_tensor = A.Compose([A.ToTensor(transpose_mask=True)], is_check_shapes=False)
         sample = to_tensor(**sample)

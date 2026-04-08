@@ -5,8 +5,10 @@ os.environ["VIPS_CONCURRENCY"] = "30"
 os.environ["OMP_NUM_THREADS"] = "4"
 import pyvips
 
-pyvips.cache_set_max(20)
-pyvips.cache_set_max_mem(1024 * 1024)
+#pyvips.cache_set_max(20)
+#pyvips.cache_set_max_mem(1024 * 1024)
+pyvips.cache_set_max(200)
+pyvips.cache_set_max_mem(1024 * 1024  * 1024)
 
 import torch
 import warnings
@@ -191,6 +193,7 @@ if __name__ == "__main__":
     pl.seed_everything(1)
 
     options = get_options()
+    print(f"[Rank {os.environ.get('RANK', 'N/A')}] DEBUG: After parsing, options.num_workers is: {options.num_workers}")
     streaming_options = get_streaming_options(options)
 
     model = configure_streamingclam(options, streaming_options)

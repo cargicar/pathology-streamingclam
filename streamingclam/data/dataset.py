@@ -5,6 +5,7 @@ import math
 import pandas as pd
 
 from pathlib import Path
+import numpy as np # Add this import
 from torch.utils.data import Dataset
 import albumentationsxl as A
 
@@ -17,7 +18,8 @@ augmentations = A.Compose(
         A.Flip(),
         A.HueSaturationValue(p=0.5),
         A.Rotate(),
-    ],
+    ], 
+    is_check_shapes=False,
 )
 
 
@@ -70,7 +72,8 @@ class StreamingClassificationDataset(Dataset):
         """Check if entries in csv file exist"""
 
         included = {"images": [], "masks": [], "labels": []} if self.mask_dir else {"images": [], "labels": []}
-        for i in range(len(self)):
+        #for i in range(len(self)):
+        for i in range(len(self.classification_frame)): # Iterate over the original DataFrame length
             images, label = self.get_img_path(i)  #
 
             # Files can be just images, but also image, mask
@@ -91,18 +94,6 @@ class StreamingClassificationDataset(Dataset):
                 included["masks"].append(images[1])
 
         self.data_paths = included
-        self._use_openslide = self._detect_openslide()
-
-    def _detect_openslide(self):
-        """Detect whether images use the openslide loader (level=) or tiff loader (page=)."""
-        if not self.data_paths["images"]:
-            return False
-        img_fname = str(self.data_paths["images"][0])
-        try:
-            pyvips.Image.new_from_file(img_fname, page=0)
-            return False
-        except pyvips.error.Error:
-            return True
 
     def get_img_path(self, idx):
         img_fname = self.classification_frame.iloc[idx, 0]
@@ -111,7 +102,9 @@ class StreamingClassificationDataset(Dataset):
         img_path = self.img_dir / Path(img_fname).with_suffix(self.filetype)
 
         if self.mask_dir:
-            mask_path = self.mask_dir / Path(img_fname + self.mask_suffix).with_suffix(self.filetype)
+            #mask_path = self.mask_dir / Path(img_fname + self.mask_suffix).with_suffix(self.filetype)
+            imag_path = Path(img_fname)
+            mask_path = self.mask_dir / f"{imag_path.stem}{self.mask_suffix}{self.filetype}"
             return [img_path, mask_path], label
 
         return [img_path], label
@@ -121,21 +114,33 @@ class StreamingClassificationDataset(Dataset):
 
         img_fname = str(self.data_paths["images"][idx])
         label = int(self.data_paths["labels"][idx])
-        # openslide loader uses `level`, tifftiled/other loaders use `page`
-        if self._use_openslide:
+        try:
+            # For openslide-compatible images (e.g. .svs, some .tif)
             image = pyvips.Image.new_from_file(img_fname, level=self.read_level)
-            # openslide produces RGBA; flatten to RGB so downstream expects 3 bands
-            if image.bands == 4:
-                image = image.flatten()
-        else:
+        except pyvips.error.Error:
+            # Fallback for standard pyramidal TIFFs
             image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
+
+        # openslide can produce RGBA, and some TIFFs might have an alpha channel
+        # flatten to RGB so downstream expects 3 bands
+        if image.bands == 4:
+            image = image.flatten()
         images["image"] = image
 
         if self.mask_dir:
             mask_fname = str(self.data_paths["masks"][idx])
-            mask = pyvips.Image.new_from_file(mask_fname)
+            # The masks are standard TIFF files, which are loaded using the `page`
+            # argument to select a resolution from the pyramid. The `level` argument
+            # is specific to formats that pyvips opens via the openslide library (e.g., .svs),
+            # which is not the case for these mask files.
+            mask = pyvips.Image.new_from_file(mask_fname, page=self.read_level)
+            if mask.bands == 4:
+                mask = mask.flatten()
+
+            # With the mask loaded at the same level, its dimensions should match the image.
+            # This resize is now mostly a safeguard for minor dimension mismatches.
             ratio = image.width / mask.width
-            images["mask"] = mask.resize(ratio, kernel="nearest")  # Resize mask to img size
+            images["mask"] = mask.resize(ratio, kernel="nearest")
 
         return images, label, img_fname
 
@@ -166,7 +171,26 @@ class StreamingClassificationDataset(Dataset):
 
             sample["mask"] = sample["mask"].resize(hscale, vscale=vscale, kernel="nearest")
 
-        to_tensor = A.Compose([A.ToTensor(transpose_mask=True)], is_check_shapes=False)
+            # Old breakpoint() was here. Moving it after potential error handling
+            # breakpoint()
+
+            # Handle potential pyvips errors during mask conversion
+            # The `albumentationsxl.ToTensor` transform expects a pyvips.Image (or PIL Image)
+            # that it can call `.numpy()` on.
+            # We explicitly convert to numpy, handle errors, then convert back to pyvips.Image
+            # to satisfy the transform.
+            try:
+                mask_np = sample["mask"].numpy()
+            except pyvips.Error as e:
+                mask_file_path = str(self.data_paths["masks"][idx])
+                print(f"WARNING: pyvips error converting mask file '{mask_file_path}' to numpy. Replacing with all-zero mask: {e}")
+                # Create an all-zero mask of the expected shape (H, W)
+                mask_np = np.zeros((sample["mask"].height, sample["mask"].width), dtype=np.uint8)
+            
+            # Convert the numpy array back to a pyvips.Image object for the ToTensor transform
+            sample["mask"] = pyvips.Image.new_from_array(mask_np)
+
+        to_tensor = A.Compose([A.ToTensor(transpose_mask=True)], is_check_shapes=False) # Ensure this line is outside the if 'mask' block if it was previously inside
         sample = to_tensor(**sample)
 
         # To ToTensor does not support cast to bool arrays yet, so do here
@@ -178,12 +202,13 @@ class StreamingClassificationDataset(Dataset):
         return sample
 
     def __len__(self):
-        return len(self.classification_frame)
+        #return len(self.classification_frame)
+        return len(self.data_paths["images"])
 
-    def get_resize_op(self, pad_to_tile_size=False):
+    def get_resize_op(self, pad_to_tile_size=False, check_shapes=False):
         if not self.variable_input_shapes:
             # Crop everything to specific image size if variable_input_shapes is off
-            return A.Compose([A.CropOrPad(self.img_size, self.img_size, p=1.0)])
+            return A.Compose([A.CropOrPad(self.img_size, self.img_size, p=1.0)], is_check_shapes=check_shapes)
 
         # Pad images that are smaller than the tile size to the tile size
         # Also, if one dimensions is larger than the tile size, make sure it is a multiple of at least the network output
@@ -206,7 +231,8 @@ class StreamingClassificationDataset(Dataset):
                         value=[255, 255, 255],
                         mask_value=[0, 0, 0],
                     ),
-                ]
+                ],
+                is_check_shapes=check_shapes,
             )
 
         # Images that are already larger than tile size should be padded to a multiple of tile_stride
@@ -220,7 +246,8 @@ class StreamingClassificationDataset(Dataset):
                     value=[255, 255, 255],
                     mask_value=[0, 0, 0],
                 ),
-            ]
+            ],
+            is_check_shapes=check_shapes,
         )
 
 

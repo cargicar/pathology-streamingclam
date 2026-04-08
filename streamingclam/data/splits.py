@@ -201,4 +201,3 @@ class StreamingCLAMDataModule(L.LightningDataModule):
         batch["label"] = batch["label"].to(device)
 
         return batch
-
