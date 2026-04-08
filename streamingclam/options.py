@@ -13,6 +13,7 @@ class TrainConfig:
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
     mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
+    mask_path: str = ""
     fold: int = 0
     train_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_train.csv"
     val_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_val.csv"

@@ -101,14 +101,17 @@ class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
             print("preparing to finetune all layers for next epoch")
             print("adjusting streaming model and dataloaders to new tile size and tile stride")
             pl_module.to(memory_format=torch.contiguous_format)
-            pl_module.tile_size = self.tile_size_finetune
+            #pl_module.tile_size = self.tile_size_finetune
             pl_module.tile_cache_fname = None
             pl_module.disable_streaming_hooks()
 
             old_stream_network_dtype = pl_module.stream_network.dtype
             old_stream_module_dtype = next(pl_module.stream_network.stream_module.parameters()).dtype
 
-            tile_cache = pl_module.load_tile_cache_if_needed()
+            #tile_cache = pl_module.load_tile_cache_if_needed()
+            #tile_cache = pl_module.stream_network.load_tile_cache_if_needed()
+            # Workaround for older light-stream: access tile_cache directly
+            tile_cache = pl_module.stream_network.stream_module.tile_cache
 
             # Reset tile cache
             pl_module.constructor.tile_size = self.tile_size_finetune
@@ -117,7 +120,8 @@ class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
             pl_module.constructor.model.to(memory_format=torch.contiguous_format)
             pl_module.constructor.model.to(torch.float32)
             pl_module.stream_network = pl_module.constructor.prepare_streaming_model()
-            pl_module.save_tile_cache_if_needed()
+            #pl_module.save_tile_cache_if_needed()
+            #pl_module.stream_network.save_tile_cache_if_needed()
 
             # Put back dtype and memoryformat
             pl_module.stream_network.dtype = old_stream_network_dtype
