@@ -115,18 +115,12 @@ class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
             tile_cache = pl_module.stream_network.get_tile_cache()
 
             # Reset tile cache
-            # pl_module.constructor.tile_size = self.tile_size_finetune
-            # pl_module.constructor.tile_cache = tile_cache
-            # pl_module.constructor.verbose = False
-            # pl_module.constructor.model.to(memory_format=torch.contiguous_format)
-            # pl_module.constructor.model.to(torch.float32)
-            # pl_module.stream_network = pl_module.constructor.prepare_streaming_model()
-            pl_module.stream_network.constructor.tile_size = self.tile_size_finetune
-            pl_module.stream_network.constructor.tile_cache = tile_cache
-            pl_module.stream_network.constructor.verbose = False
-            pl_module.stream_network.constructor.model.to(memory_format=torch.contiguous_format)
-            pl_module.stream_network.constructor.model.to(torch.float32)
-            pl_module.stream_network = pl_module.stream_network.constructor.prepare_streaming_model()
+            pl_module.constructor.tile_size = self.tile_size_finetune
+            pl_module.constructor.tile_cache = tile_cache
+            pl_module.constructor.verbose = False
+            pl_module.constructor.model.to(memory_format=torch.contiguous_format)
+            pl_module.constructor.model.to(torch.float32)
+            pl_module.stream_network = pl_module.constructor.prepare_streaming_model()
             #pl_module.save_tile_cache_if_needed()
             #pl_module.stream_network.save_tile_cache_if_needed()
 

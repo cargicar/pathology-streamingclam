@@ -137,6 +137,8 @@ class StreamingCLAM(LightningStreamingModule):
         # Module.__init__() is called here; nn.Module attributes can be assigned after this
         super().__init__(stream_module)
 
+        self.constructor = stream_module.constructor
+
         self.head = head
         self.loss_fn = loss_fn
         self.ds_blocks = _ds_blocks  # None or nn.Sequential
@@ -374,7 +376,9 @@ class StreamingCLAM(LightningStreamingModule):
         # Don't call this>? https://pytorch-lightning.readthedocs.io/en/1.5.10/guides/speed.html#things-to-avoid
         torch.cuda.empty_cache()
         if self.train_streaming_layers:
-            self.backward_streaming(self.image, self.str_output.grad)
+            #self.backward_streaming(self.image, self.str_output.grad)
+            grad = self.str_output.grad.to(self.device)
+            self.backward_streaming(self.image, grad)
         del self.str_output, self.image
 
 

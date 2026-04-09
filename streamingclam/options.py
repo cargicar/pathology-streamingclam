@@ -12,7 +12,7 @@ class TrainConfig:
     wandb_project_name: str = "sclam_debug"  # the name of the wandb project, if using wandb logger
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
-    mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
+    #mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
     mask_path: str = ""
     fold: int = 0
     train_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_train.csv"
@@ -34,7 +34,7 @@ class TrainConfig:
     precision: str = "32"
 
     # StreamingClam options
-    encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    encoder: str = "resnet18"  # Resnet 18, ResNet34, Resnet50, Resnet39
     branch: str = "sb"  # sb or mb
     pooling_layer: str = "maxpool"  # one of maxpool, avgpool
     pooling_kernel: int = 8  # Kernel size & stride for the maxpool/avgpool
@@ -48,9 +48,13 @@ class TrainConfig:
                                  # the finetuning callback defined in finetuned.py will handle the optimizer for all layers
     additive: bool = True  # whether to add the output of the streaming layers to the output of the encoder, or to replace it  
     # Streaming options
-    tile_size: int = 9984  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
-    tile_size_finetune: int = 9984  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+    # tile_size: int = 9984  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
+    # tile_size_finetune: int = 9984  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+    tile_size: int = 8000  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
+    tile_size_finetune: int = 8000  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+
     statistics_on_cpu: bool = True
+    
     verbose: bool = True
     train_streaming_layers: bool = False
     normalize_on_gpu: bool = True
