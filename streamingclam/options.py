@@ -8,8 +8,8 @@ import argparse
 @dataclass_json
 @dataclasses.dataclass
 class TrainConfig:
-    experiment_name: str = "sclam_gigapixel"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
-    wandb_project_name: str = "sclam_gigapixel"  # the name of the wandb project, if using wandb logger
+    experiment_name: str = "sclam_debug"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
+    wandb_project_name: str = "sclam_debug"  # the name of the wandb project, if using wandb logger
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
     mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
@@ -34,7 +34,7 @@ class TrainConfig:
     precision: str = "32"
 
     # StreamingClam options
-    encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    encoder: str = "resnet18"  # Resnet 18, ResNet34, Resnet50, Resnet39
     branch: str = "sb"  # sb or mb
     pooling_layer: str = "maxpool"  # one of maxpool, avgpool
     pooling_kernel: int = 8  # Kernel size & stride for the maxpool/avgpool
@@ -50,8 +50,8 @@ class TrainConfig:
     # Streaming options
     # tile_size: int = 9984  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
     # tile_size_finetune: int = 9984  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
-    tile_size: int = 8000  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
-    tile_size_finetune: int = 8000  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+    tile_size: int = 5000  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
+    tile_size_finetune: int = 5000  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
 
     statistics_on_cpu: bool = True
     

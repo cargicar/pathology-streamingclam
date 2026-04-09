@@ -137,6 +137,11 @@ class StreamingClassificationDataset(Dataset):
             if mask.bands == 4:
                 mask = mask.flatten()
 
+            #J: Suggestion 
+            # mask_meta = pyvips.Image.new_from_file(mask_fname)
+            # n_mask_pages = mask_meta.get('n-pages') if mask_meta.get_typeof("n-pages") else 1
+            # mask = pyvips.Image.new_from_file(mask_fname, page=n_mask_pages-1)
+
             # With the mask loaded at the same level, its dimensions should match the image.
             # This resize is now mostly a safeguard for minor dimension mismatches.
             ratio = image.width / mask.width
