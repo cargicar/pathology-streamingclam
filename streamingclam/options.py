@@ -8,12 +8,12 @@ import argparse
 @dataclass_json
 @dataclasses.dataclass
 class TrainConfig:
-    experiment_name: str = "sclam_debug"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
-    wandb_project_name: str = "sclam_debug"  # the name of the wandb project, if using wandb logger
+    experiment_name: str = "sclam_gigapixel"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
+    wandb_project_name: str = "sclam_gigapixel"  # the name of the wandb project, if using wandb logger
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
-    #mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
-    mask_path: str = ""
+    mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
+    #mask_path: str = ""
     fold: int = 0
     train_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_train.csv"
     val_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_val.csv"
@@ -21,7 +21,7 @@ class TrainConfig:
     attention_csv: str = ""
     mask_suffix: str = "_tissue"  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
     mode: str = "fit" #train, fit, validation, test, attention, or predict
-    unfreeze_streaming_layers_at_epoch: int = 1
+    unfreeze_streaming_layers_at_epoch: int = 10
 
     # Trainer options
     num_epochs: int = 40  # The number of epochs to train (max)
@@ -34,7 +34,7 @@ class TrainConfig:
     precision: str = "32"
 
     # StreamingClam options
-    encoder: str = "resnet18"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
     branch: str = "sb"  # sb or mb
     pooling_layer: str = "maxpool"  # one of maxpool, avgpool
     pooling_kernel: int = 8  # Kernel size & stride for the maxpool/avgpool
@@ -64,7 +64,7 @@ class TrainConfig:
     image_size: int = 65536  # represents image size if variable_input_shape=False, else the maximum image size
     variable_input_shapes: bool = True
     filetype: str = ".tif"
-    read_level: int = 4  # the level of the tif file (0 is highest resolution)
+    read_level: int = 1  # the level of the tif file (0 is highest resolution)
     num_workers: int = 4
     use_augmentations: bool = True
 
