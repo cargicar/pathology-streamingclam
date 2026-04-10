@@ -129,21 +129,24 @@ class StreamingClassificationDataset(Dataset):
 
         if self.mask_dir:
             mask_fname = str(self.data_paths["masks"][idx])
-            # The masks are standard TIFF files, which are loaded using the `page`
-            # argument to select a resolution from the pyramid. The `level` argument
-            # is specific to formats that pyvips opens via the openslide library (e.g., .svs),
-            # which is not the case for these mask files.
-            mask = pyvips.Image.new_from_file(mask_fname, page=self.read_level)
+            # To robustly handle potentially corrupt or oddly-formatted TIFF masks,
+            # we will load the lowest-resolution page. This page is least likely
+            # to suffer from tile corruption errors and can be scaled up.
+            try:
+                mask_meta = pyvips.Image.new_from_file(mask_fname)
+                # .get('n-pages') gives the number of pages in a multi-page TIFF.
+                n_mask_pages = mask_meta.get('n-pages') if mask_meta.get_typeof("n-pages") else 1
+                # Load the last page, which is the smallest resolution.
+                mask = pyvips.Image.new_from_file(mask_fname, page=n_mask_pages - 1)
+            except pyvips.Error:
+                # Fallback to the original method if the above fails, though it's less likely.
+                mask = pyvips.Image.new_from_file(mask_fname, page=self.read_level)
+
             if mask.bands == 4:
                 mask = mask.flatten()
 
-            #J: Suggestion 
-            # mask_meta = pyvips.Image.new_from_file(mask_fname)
-            # n_mask_pages = mask_meta.get('n-pages') if mask_meta.get_typeof("n-pages") else 1
-            # mask = pyvips.Image.new_from_file(mask_fname, page=n_mask_pages-1)
-
-            # With the mask loaded at the same level, its dimensions should match the image.
-            # This resize is now mostly a safeguard for minor dimension mismatches.
+            # The mask (now loaded at its lowest resolution) is resized to match the
+            # dimensions of the main image at its target resolution.
             ratio = image.width / mask.width
             images["mask"] = mask.resize(ratio, kernel="nearest")
 

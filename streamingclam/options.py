@@ -4,12 +4,11 @@ import torch.nn
 from dataclasses_json import dataclass_json
 import argparse
 
-
 @dataclass_json
 @dataclasses.dataclass
 class TrainConfig:
-    experiment_name: str = "sclam_debug"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
-    wandb_project_name: str = "sclam_debug"  # the name of the wandb project, if using wandb logger
+    experiment_name: str = "sclam_gigapixel"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
+    wandb_project_name: str = "sclam_gigapixel"  # the name of the wandb project, if using wandb logger
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
     mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
@@ -28,13 +27,13 @@ class TrainConfig:
     strategy: str = "ddp_find_unused_parameters_true"
     default_save_dir: str = "/data/ccardona/sstep_savedir/experiments/"
     ckp_path: str = ""  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
-    resume: bool = False  # Whether to resume training from the last/best epoch
+    resume: bool = True  # Whether to resume training from the last/best epoch
     grad_batches: int = 4  # Gradient accumulation: the amount of batches before optimizer step
     num_gpus: int = 4
     precision: str = "32"
 
     # StreamingClam options
-    encoder: str = "resnet18"  # Resnet 18, ResNet34, Resnet50, Resnet39
+    encoder: str = "resnet34"  # Resnet 18, ResNet34, Resnet50, Resnet39
     branch: str = "sb"  # sb or mb
     pooling_layer: str = "maxpool"  # one of maxpool, avgpool
     pooling_kernel: int = 8  # Kernel size & stride for the maxpool/avgpool
@@ -44,7 +43,7 @@ class TrainConfig:
     return_features: bool = False
     attention_only: bool = False
     stream_pooling_kernel: bool = False
-    learning_rate: float = 2e-4  # the learning rate when training the CLAM head,
+    learning_rate: float = 1e-4  # the learning rate when training the CLAM head,
                                  # the finetuning callback defined in finetuned.py will handle the optimizer for all layers
     additive: bool = True  # whether to add the output of the streaming layers to the output of the encoder, or to replace it  
     # Streaming options
@@ -65,7 +64,7 @@ class TrainConfig:
     variable_input_shapes: bool = True
     filetype: str = ".tif"
     read_level: int = 1  # the level of the tif file (0 is highest resolution)
-    num_workers: int = 4
+    num_workers: int = 3
     use_augmentations: bool = True
 
     # Attention writer options

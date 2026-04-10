@@ -98,8 +98,7 @@ def plot_and_save_mask(mask_path, output_path, read_level=4, delete_corrupt=Fals
                 print(f"🔥 Error deleting file {mask_path}: {del_e}")
 
     plotting = False if is_corrupt else True
-    plotting = False
-    if plotting:
+    if plotting: # The line `plotting = False` was likely for debugging and has been removed
         plt.figure(figsize=(10, 10))
         plt.imshow(mask_np, cmap='gray')
         title = f"Mask: {mask_path.name}\n(Level {read_level})"
