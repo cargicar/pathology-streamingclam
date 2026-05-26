@@ -259,9 +259,9 @@ class StreamingCLAM(LightningStreamingModule):
         self.train_acc.update(torch.argmax(logits, dim=1).detach(), label.detach())
         self.train_auc.update(probs[:, 1].detach(), label.detach())
 
-        self.log("train_acc", self.train_acc, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_auc", self.train_auc, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("train_loss", loss.detach(), prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train_acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train_auc", self.train_auc, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train_loss", loss.detach(), prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -277,9 +277,9 @@ class StreamingCLAM(LightningStreamingModule):
         # https://torchmetrics.readthedocs.io/en/stable/pages/lightning.html
         # https: // lightning.ai / docs / pytorch / stable / extensions / logging.html
 
-        self.log("valid_acc", self.val_acc, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("valid_auc", self.val_auc, on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("val_loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
+        self.log("valid_acc", self.val_acc,  on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("valid_auc", self.val_auc,  on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         return loss
 
     def test_step(self, batch, batch_idx):

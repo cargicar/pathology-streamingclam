@@ -64,19 +64,6 @@ def configure_callbacks(options):
     return callbacks
 
 
-def configure_checkpoints():
-    try:
-        # Check for last checkpoint
-        last_checkpoint = list(Path(options.default_save_dir + f"/{options.experiment_name}/fold_{str(options.fold)}").glob("*last.ckpt"))
-        last_checkpoint_path = str(last_checkpoint[0])
-    except IndexError:
-        if options.resume:
-            warnings.warn("Resume option enabled, but no checkpoint files found. Training will start from scratch.")
-        last_checkpoint_path = None
-
-    return last_checkpoint_path
-
-
 def configure_trainer(options, wandb_logger=None):
     callbacks = configure_callbacks(options)
     trainer = pl.Trainer(
@@ -123,6 +110,34 @@ def get_streaming_options(options):
     return {key: opt_dict[key] for key in fields}
 
 
+def configure_checkpoints(options):
+    ckp_dir = Path(options.default_save_dir) / options.experiment_name / f"fold_{options.fold}" / "ckp"
+    print(f"INFO: Searching for checkpoints in: {ckp_dir}")
+    if not ckp_dir.is_dir():
+        if options.mode == 'fit' and options.resume:
+            warnings.warn(f"Checkpoint directory {ckp_dir} not found. Training will start from scratch.")
+        return None
+
+    # 1. Try to find `last.ckpt`
+    last_checkpoint_list = list(ckp_dir.glob("last.ckpt"))
+    if last_checkpoint_list:
+        last_checkpoint_path = str(last_checkpoint_list[0])
+        print(f"Found last checkpoint file at {last_checkpoint_path}")
+        return last_checkpoint_path
+
+    # 2. If not found, find all .ckpt files and pick the latest one by modification time.
+    all_checkpoints = list(ckp_dir.glob("*.ckpt"))
+    if all_checkpoints:
+        latest_checkpoint = max(all_checkpoints, key=lambda p: p.stat().st_mtime)
+        latest_checkpoint_path = str(latest_checkpoint)
+        warnings.warn(f"WARNING: 'last.ckpt' not found. Using the most recently modified checkpoint: {latest_checkpoint_path}")
+        return latest_checkpoint_path
+
+    if options.mode == 'fit' and options.resume:
+        warnings.warn(f"Resume option enabled, but no checkpoint files found in {ckp_dir}. Training will start from scratch.")
+    return None
+
+
 def configure_streamingclam(options, streaming_options):
     sclam_opts = {
         "encoder": options.encoder,
@@ -149,8 +164,18 @@ def configure_streamingclam(options, streaming_options):
             **streaming_options,
         )
     else:
+        checkpoint_path = options.ckp_path
+        if not checkpoint_path:
+            # If ckp_path is not provided, try to find the last checkpoint
+            print("No ckp_path provided, trying to find last checkpoint...")
+            checkpoint_path = configure_checkpoints(options)
+            if not checkpoint_path:
+                raise ValueError(
+                    "Could not find a checkpoint to load for test/attention mode. "
+                    "Please specify a --ckp_path or ensure a 'last.ckpt' file exists in the experiment directory."
+                )
         model = StreamingCLAM.load_from_checkpoint(
-            options.ckp_path,
+            checkpoint_path,
             **sclam_opts,
             **streaming_options,
         )
@@ -221,7 +246,7 @@ if __name__ == "__main__":
             print("at rank 0, logging wandb config")
             wandb_logger.experiment.config.update(options.to_dict())
 
-        last_checkpoint_path = configure_checkpoints()
+        last_checkpoint_path = configure_checkpoints(options)
         # model.head = torch.compile(model.head)
         # model.stream_network.stream_module = torch.compile(model.stream_network.stream_module)
         # print(model.stream_network)

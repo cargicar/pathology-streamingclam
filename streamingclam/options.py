@@ -7,8 +7,8 @@ import argparse
 @dataclass_json
 @dataclasses.dataclass
 class TrainConfig:
-    experiment_name: str = "sclam_gigapixel"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
-    wandb_project_name: str = "sclam_gigapixel"  # the name of the wandb project, if using wandb logger
+    experiment_name: str = "sclam_gigapixel_run2"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
+    wandb_project_name: str = "sclam_gigapixel_run2"  # the name of the wandb project, if using wandb logger
     logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
     image_path: str = "/data/wsi_data/CAMELYON16/images"
     mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
@@ -19,14 +19,15 @@ class TrainConfig:
     test_csv: str = "/data/wsi_data/CAMELYON16/camelyon16_test.csv"
     attention_csv: str = ""
     mask_suffix: str = "_tissue"  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
-    mode: str = "fit" #train, fit, validation, test, attention, or predict
-    unfreeze_streaming_layers_at_epoch: int = 10
+    mode: str = "test" #train, fit, validation, test, attention, or predict
+    unfreeze_streaming_layers_at_epoch: int = 13
 
     # Trainer options
-    num_epochs: int = 40  # The number of epochs to train (max)
+    num_epochs: int = 2  # The number of epochs to train (max)
     strategy: str = "ddp_find_unused_parameters_true"
     default_save_dir: str = "/data/ccardona/sstep_savedir/experiments/"
-    ckp_path: str = ""  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
+    ckp_path: str = "" #"/data/ccardona/sstep_savedir/experiments/sclam_gigapixel_run2/fold_0/ckp/streamingclam-epoch=13-val_loss=0.50-val_acc=0.00.ckpt"  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
+
     resume: bool = True  # Whether to resume training from the last/best epoch
     grad_batches: int = 4  # Gradient accumulation: the amount of batches before optimizer step
     num_gpus: int = 4
@@ -43,14 +44,14 @@ class TrainConfig:
     return_features: bool = False
     attention_only: bool = False
     stream_pooling_kernel: bool = False
-    learning_rate: float = 1e-4  # the learning rate when training the CLAM head,
+    learning_rate: float = 5e-5  # the learning rate when training the CLAM head,
                                  # the finetuning callback defined in finetuned.py will handle the optimizer for all layers
     additive: bool = True  # whether to add the output of the streaming layers to the output of the encoder, or to replace it  
     # Streaming options
-    # tile_size: int = 9984  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
-    # tile_size_finetune: int = 9984  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
-    tile_size: int = 5000  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
-    tile_size_finetune: int = 5000  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+    #tile_size: int = 6000  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
+    #tile_size_finetune: int = 6000  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
+    tile_size: int = 3500  # The tile size on the gpu, as high as the gpu vram can handle (will not affect classification performance, only speed)
+    tile_size_finetune: int = 3500  # Same as above, but should be lower since gradients of the entire model need to be kept in memory
 
     statistics_on_cpu: bool = True
     

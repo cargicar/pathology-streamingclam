@@ -49,23 +49,20 @@ class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
         # When `current_epoch` is self._unfreeze_at_epoch, feature_extractor will start training.
         # Check this for every epoch in case we are resuming after failure
 
-        if current_epoch == self._unfreeze_at_epoch:
-            current_lr = optimizer.param_groups[0]["lr"]
-            initial_backbone_lr = (
-                self.backbone_initial_lr
-                if self.backbone_initial_lr is not None
-                else current_lr * self.backbone_initial_ratio_lr
-            )
-            self.previous_backbone_lr = initial_backbone_lr
-
-            if self.verbose:
-                log.info(
-                    f"Current lr: {round(current_lr, self.rounding)}, "
-                    f"Backbone lr: {round(initial_backbone_lr, self.rounding)}"
-                )
-
         if current_epoch >= self._unfreeze_at_epoch:
             if self.switch:
+                current_lr = optimizer.param_groups[0]["lr"]
+                initial_backbone_lr = (
+                    self.backbone_initial_lr
+                    if self.backbone_initial_lr is not None
+                    else current_lr * self.backbone_initial_ratio_lr
+                )
+                self.previous_backbone_lr = initial_backbone_lr
+                if self.verbose:
+                    log.info(
+                        f"Current lr: {round(current_lr, self.rounding)}, "
+                        f"Backbone lr: {round(initial_backbone_lr, self.rounding)}"
+                    )
                 pl_module.train_streaming_layers = True
                 self.unfreeze_and_add_param_group(
                     modules=pl_module.stream_network.stream_module,
