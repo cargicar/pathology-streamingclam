@@ -23,7 +23,7 @@ class TrainConfig:
     unfreeze_streaming_layers_at_epoch: int = 13
 
     # Trainer options
-    num_epochs: int = 2  # The number of epochs to train (max)
+    num_epochs: int = 40  # The number of epochs to train (max)
     strategy: str = "ddp_find_unused_parameters_true"
     default_save_dir: str = "/data/ccardona/sstep_savedir/experiments/"
     ckp_path: str = "" #"/data/ccardona/sstep_savedir/experiments/sclam_gigapixel_run2/fold_0/ckp/streamingclam-epoch=13-val_loss=0.50-val_acc=0.00.ckpt"  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
