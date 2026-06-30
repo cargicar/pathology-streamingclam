@@ -479,6 +479,28 @@ Additionally, test/attention mode now auto-discovers the checkpoint:
 
 Why: The original limits (20 operations, 1 MB) were very conservative and caused repeated re-reads of tiles that could have been cached. Increasing to 200 operations and 1 GB allows pyvips to cache more tile data in memory, which reduces disk I/O for large slides where the same region is accessed multiple times during a streaming pass.
 
+#### ImageMagick loader bypass (`streamingclam/data/dataset.py`)
+
+```diff
+-        try:
+-            image = pyvips.Image.new_from_file(img_fname, level=self.read_level)
+-        except pyvips.error.Error:
+-            image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
++        try:
++            image = pyvips.Image.openslideload(img_fname, level=self.read_level)
++        except pyvips.error.Error:
++            try:
++                image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
++            except pyvips.error.Error:
++                image = pyvips.Image.new_from_file(img_fname)
+```
+
+Why: When loading `.svs` files (Aperio/TCGA format), `pyvips.Image.new_from_file` auto-detects the format and routes to `VipsForeignLoadMagick7File` (ImageMagick) instead of the OpenSlide loader. ImageMagick does not support the `level=` argument, causing an immediate `pyvips.error.Error`. The fallback to `page=` also fails because ImageMagick's TIFF reader rejects the SVS internal structure (`TIFFReadDirectory: Failed to read directory at offset ...`). The result is a crash in the DataLoader worker.
+
+The fix calls `pyvips.Image.openslideload()` explicitly, which unconditionally routes to the OpenSlide backend and correctly interprets `level=` for multi-resolution `.svs` files. The fallback chain is retained for non-SVS formats: `new_from_file(page=)` handles standard pyramidal TIFFs, and bare `new_from_file()` (no level selection, loads level 0) is the last resort.
+
+This change was triggered by switching the dataset from CAMELYON16 (`.tif`, handled by pyvips's TIFF backend) to TCGA lung (`.svs`, requires OpenSlide).
+
 File: [main.py](main.py)
 
 ---

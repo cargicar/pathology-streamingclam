@@ -1,6 +1,6 @@
 import os
 
-os.environ["WANDB_DIR"] = "/home/stephandooper"
+os.environ["WANDB_DIR"] = os.environ.get("WANDB_DIR", os.path.expanduser("~"))
 os.environ["VIPS_CONCURRENCY"] = "30"
 os.environ["OMP_NUM_THREADS"] = "4"
 import pyvips
@@ -12,12 +12,15 @@ pyvips.cache_set_max_mem(1024 * 1024  * 1024)
 
 import torch
 import warnings
+import numpy as np
+import pandas as pd
 
 from pathlib import Path
+from sklearn.metrics import roc_auc_score
 
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers import WandbLogger, CSVLogger, TensorBoardLogger
 
 from streamingclam.options import TrainConfig
 from streamingclam.utils.memory_format import MemoryFormat
@@ -64,7 +67,23 @@ def configure_callbacks(options):
     return callbacks
 
 
-def configure_trainer(options, wandb_logger=None):
+def configure_logger(options):
+    log_dir = str(options.default_save_dir)
+    if options.logger_type == "wandb":
+        return WandbLogger(
+            name=options.experiment_name,
+            project=options.wandb_project_name,
+            save_dir=log_dir,
+        )
+    elif options.logger_type == "tensorboard":
+        return TensorBoardLogger(save_dir=log_dir, name=options.experiment_name)
+    elif options.logger_type == "csv":
+        return CSVLogger(save_dir=log_dir, name=options.experiment_name)
+    else:
+        raise ValueError(f"Unknown logger_type '{options.logger_type}'. Choose from: wandb, tensorboard, csv")
+
+
+def configure_trainer(options, logger=None):
     callbacks = configure_callbacks(options)
     trainer = pl.Trainer(
         default_root_dir=options.default_save_dir,
@@ -77,7 +96,7 @@ def configure_trainer(options, wandb_logger=None):
         strategy=options.strategy,
         benchmark=False,
         reload_dataloaders_every_n_epochs=options.unfreeze_streaming_layers_at_epoch,
-        logger=wandb_logger if wandb_logger else None,
+        logger=logger,
     )
     return trainer
 
@@ -199,9 +218,52 @@ def configure_datamodule(options):
         variable_input_shapes=options.variable_input_shapes,
         copy_to_gpu=options.copy_to_gpu,
         num_workers=options.num_workers,
+        filetype=options.filetype,
         transform=augmentations if (options.use_augmentations and options.mode == "fit") else None,
         output_dir=Path(options.default_save_dir) / Path(f"/{options.experiment_name}/attentions")
     )
+
+
+def compute_bootstrap_auc(y_true, y_score, n_bootstrap=10000, seed=42):
+    """Bootstrap 95% CI for AUC via slide-level resampling with replacement."""
+    rng = np.random.default_rng(seed)
+    n = len(y_true)
+    auc_scores = []
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        if len(np.unique(y_true[idx])) < 2:
+            continue  # skip degenerate samples that have only one class
+        auc_scores.append(roc_auc_score(y_true[idx], y_score[idx]))
+    auc_point = roc_auc_score(y_true, y_score)
+    auc_scores = np.array(auc_scores)
+    ci_lower = float(np.percentile(auc_scores, 2.5))
+    ci_upper = float(np.percentile(auc_scores, 97.5))
+    return auc_point, ci_lower, ci_upper
+
+
+def run_bootstrap_analysis(options):
+    test_csv = (
+        Path(options.default_save_dir)
+        / options.experiment_name
+        / f"fold_{options.fold}"
+        / "test.csv"
+    )
+    if not test_csv.exists():
+        print(f"Bootstrap skipped: {test_csv} not found.")
+        return
+
+    df = pd.read_csv(test_csv)
+    y_true = df["label"].values
+    # probs is stored as numpy repr e.g. "[0.3 0.7]" — take the positive-class column
+    y_score = np.array(
+        [np.fromstring(p.strip("[]"), sep=" ")[-1] for p in df["probs"].astype(str)]
+    )
+
+    auc, ci_low, ci_high = compute_bootstrap_auc(y_true, y_score)
+    print("\n=== Bootstrap AUC (n=10,000, 95% CI) ===")
+    print(f"  AUC:     {auc:.4f}")
+    print(f"  95% CI:  [{ci_low:.4f}, {ci_high:.4f}]")
+    print(f"  Slides:  {len(df)}")
 
 
 def get_options():
@@ -233,18 +295,11 @@ if __name__ == "__main__":
     dm.setup(stage=options.mode)
 
     if options.mode == "fit":
-        wandb_logger = WandbLogger(
-            name=options.experiment_name,
-            project=options.wandb_project_name,
-            save_dir="/home/stephandooper",
-        )
+        logger = configure_logger(options)
+        trainer = configure_trainer(options, logger)
 
-        trainer = configure_trainer(options, wandb_logger)
-
-        # log gradients, parameter histogram and model topology
-        if trainer.global_rank == 0:
-            print("at rank 0, logging wandb config")
-            wandb_logger.experiment.config.update(options.to_dict())
+        if options.logger_type == "wandb" and trainer.global_rank == 0:
+            logger.experiment.config.update(options.to_dict())
 
         last_checkpoint_path = configure_checkpoints(options)
         # model.head = torch.compile(model.head)
@@ -263,6 +318,8 @@ if __name__ == "__main__":
             trainer.predict(model=model, datamodule=dm,)
         elif options.mode=="test":
             trainer.test(model=model, datamodule=dm,)
+            if trainer.is_global_zero:
+                run_bootstrap_analysis(options)
 
 
 

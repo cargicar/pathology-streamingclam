@@ -68,8 +68,24 @@ class StreamingClassificationDataset(Dataset):
 
         self.labels = self.data_paths["labels"]
 
+    @staticmethod
+    def _try_open(img_fname):
+        """Return True if pyvips can open the file header, False otherwise."""
+        fname = str(img_fname)
+        for loader in (
+            lambda f: pyvips.Image.openslideload(f, level=0),
+            lambda f: pyvips.Image.tiffload(f, page=0),
+            lambda f: pyvips.Image.new_from_file(f),
+        ):
+            try:
+                loader(fname)
+                return True
+            except pyvips.error.Error:
+                continue
+        return False
+
     def check_csv(self):
-        """Check if entries in csv file exist"""
+        """Check if entries in csv file exist and can be opened."""
 
         included = {"images": [], "masks": [], "labels": []} if self.mask_dir else {"images": [], "labels": []}
         #for i in range(len(self)):
@@ -85,6 +101,10 @@ class StreamingClassificationDataset(Dataset):
                     break
 
             if not all_exist:
+                continue
+
+            if not self._try_open(images[0]):
+                print(f"WARNING {images[0]} cannot be opened by any loader, excluded!")
                 continue
 
             included["images"].append(images[0])
@@ -115,11 +135,13 @@ class StreamingClassificationDataset(Dataset):
         img_fname = str(self.data_paths["images"][idx])
         label = int(self.data_paths["labels"][idx])
         try:
-            # For openslide-compatible images (e.g. .svs, some .tif)
-            image = pyvips.Image.new_from_file(img_fname, level=self.read_level)
+            image = pyvips.Image.openslideload(img_fname, level=self.read_level)
         except pyvips.error.Error:
-            # Fallback for standard pyramidal TIFFs
-            image = pyvips.Image.new_from_file(img_fname, page=self.read_level)
+            try:
+                # Direct TIFF loader — bypasses ImageMagick auto-detection for .svs
+                image = pyvips.Image.tiffload(img_fname, page=self.read_level)
+            except pyvips.error.Error:
+                image = pyvips.Image.tiffload(img_fname, page=0)
 
         # openslide can produce RGBA, and some TIFFs might have an alpha channel
         # flatten to RGB so downstream expects 3 bands

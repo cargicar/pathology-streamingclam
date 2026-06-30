@@ -123,8 +123,23 @@ class TestPredictionWriter(Callback):
             self.output_dir.mkdir(parents=True)
 
     def on_test_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        test_df = pd.DataFrame(pl_module.test_outputs)
-        test_df.to_csv(str(self.output_dir / Path("test.csv")), index=False)
+        rank = trainer.global_rank
+        rank_csv = self.output_dir / f"test_rank{rank}.csv"
+        pd.DataFrame(pl_module.test_outputs).to_csv(str(rank_csv), index=False)
+
+        # Wait for all ranks to finish writing before merging
+        trainer.strategy.barrier()
+
+        if trainer.is_global_zero:
+            dfs = []
+            for r in range(trainer.world_size):
+                rpath = self.output_dir / f"test_rank{r}.csv"
+                if rpath.exists():
+                    dfs.append(pd.read_csv(rpath))
+                    rpath.unlink()
+            pd.concat(dfs, ignore_index=True).to_csv(
+                str(self.output_dir / "test.csv"), index=False
+            )
 
 
 

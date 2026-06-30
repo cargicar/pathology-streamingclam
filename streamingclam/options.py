@@ -9,14 +9,20 @@ import argparse
 class TrainConfig:
     experiment_name: str = "sclam_gigapixel_run2"  # checkpoints, attention maps, outputs are stored under this experiment name within default_save_dir
     wandb_project_name: str = "sclam_gigapixel_run2"  # the name of the wandb project, if using wandb logger
-    logger_type: str = "wandb"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc.
+    logger_type: str = "csv"  # Options: "wandb", "tensorboard", "csv", "mlflow", etc. #export WANDB_MODE=offline
     image_path: str = "/data/wsi_data/CAMELYON16/images"
+    #image_path: str ="/data_nvme/wsi/split_lung/train"    
+    #image_path: str ="/data_nvme/wsi/split_lung/test"
     mask_path: str = "/data/wsi_data/CAMELYON16/background_tissue"
-    #mask_path: str = ""
+    mask_path: str = ""
     fold: int = 0
-    train_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_train.csv"
-    val_csv: str = f"/data/wsi_data/CAMELYON16/camelyon16_val.csv"
+    train_csv: str = "/data/wsi_data/CAMELYON16/camelyon16_train.csv"
+    val_csv: str = "/data/wsi_data/CAMELYON16/camelyon16_val.csv"
     test_csv: str = "/data/wsi_data/CAMELYON16/camelyon16_test.csv"
+    #train_csv:  str = "/home/ccardona/pathology-streamingclam/lung_train.csv"
+    #val_csv:    str = "/home/ccardona/pathology-streamingclam/lung_val.csv"
+    #test_csv:   str = "/home/ccardona/pathology-streamingclam/lung_test.csv"
+
     attention_csv: str = ""
     mask_suffix: str = "_tissue"  # the suffix for mask tissues e.g. tumor_069_<mask_suffix>.tif
     mode: str = "test" #train, fit, validation, test, attention, or predict
@@ -28,7 +34,7 @@ class TrainConfig:
     default_save_dir: str = "/data/ccardona/sstep_savedir/experiments/"
     ckp_path: str = "" #"/data/ccardona/sstep_savedir/experiments/sclam_gigapixel_run2/fold_0/ckp/streamingclam-epoch=13-val_loss=0.50-val_acc=0.00.ckpt"  # the name fo the ckp file within the default_save_dir, otherwise last.ckpt will be used (if present)
 
-    resume: bool = True  # Whether to resume training from the last/best epoch
+    resume: bool = True # Whether to resume training from the last/best epoch
     grad_batches: int = 4  # Gradient accumulation: the amount of batches before optimizer step
     num_gpus: int = 4
     precision: str = "32"
@@ -64,6 +70,7 @@ class TrainConfig:
     image_size: int = 65536  # represents image size if variable_input_shape=False, else the maximum image size
     variable_input_shapes: bool = True
     filetype: str = ".tif"
+    #filetype:   str = ".svs"
     read_level: int = 1  # the level of the tif file (0 is highest resolution)
     num_workers: int = 3
     use_augmentations: bool = True
